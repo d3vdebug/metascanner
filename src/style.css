@@ -1020,4 +1020,8 @@ button.hidden { display: none; }
       bottom: 10px;
       right: 10px;
   }
+
+  .history-item-delete{
+    opacity: 1;
+  }
 }
