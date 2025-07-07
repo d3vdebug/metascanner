@@ -512,7 +512,8 @@ button.hidden { display: none; }
   flex-shrink: 0;
 }
 .google-maps-icon-button img {
-  border-radius: 5px;
+  border-radius: 50%;
+  border: 1px solid #ffffff;
   width: 40px; height: 40px;
   object-fit: contain;
   
@@ -607,15 +608,17 @@ button.hidden { display: none; }
 
 .metadata-header {
   border-bottom: 1px solid white;
-  border: 1px solid white;
+  border: 1px solid rgb(5, 255, 59);
+  border-radius: 8px;
   margin-top: 10px;
-  margin-left: 12px; margin-right: 12px;
+  margin-left: 12px; 
+  margin-right: 12px;
   padding: 15px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 0.5rem;
-  width: 100%;
+  width: 95%;
 }
 .metadata-title{ font-size: 18px; }
 .metadata-header h3 {
@@ -668,7 +671,7 @@ button.hidden { display: none; }
 }
 
 #rawMetadataOutput {
-  width: 100%;
+  width: 95%;
   background-color: #0A0A0A;
   border: 1px dashed #008800;
   padding: 10px;
@@ -880,6 +883,18 @@ button.hidden { display: none; }
   border-radius: 0.5rem;
 }
 
+#button-group-export{
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 10px;
+
+
+  
+}
+
+
 #map {
   display: flex;
   justify-content: space-between;
@@ -925,7 +940,7 @@ button.hidden { display: none; }
       max-width: unset;
   }
   .metadata-header { width: 90%; }
-  #rawMetadataOutput { width: 100%; }
+  #rawMetadataOutput { width: 95%; }
   
   .navbar {
       flex-wrap: wrap;
