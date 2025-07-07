@@ -826,6 +826,40 @@ button.hidden { display: none; }
   opacity: 0.15;
 }
 
+/* --- ADDED: Styles for the new delete button --- */
+.history-item-delete {
+  position: absolute;
+  top: 50%;
+  right: 1rem;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0.25rem;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s, transform 0.2s;
+}
+#historyList li:hover .history-item-delete {
+  opacity: 1;
+}
+.history-item-delete svg {
+  stroke: #ff4d4d;
+  width: 18px;
+  height: 18px;
+  pointer-events: none; /* Make sure clicks go to the button */
+}
+.history-item-delete:hover {
+  transform: translateY(-50%) scale(1.15);
+  background: none;
+  box-shadow: none;
+}
+.history-item-delete:hover svg {
+  stroke: #ff0000;
+  filter: drop-shadow(0 0 2px #ff0000);
+}
+
+
 .map-selector-group {
   padding: 0;
   border-radius: 5px;
@@ -889,9 +923,6 @@ button.hidden { display: none; }
   justify-content: center;
   gap: 10px;
   margin-top: 10px;
-
-
-  
 }
 
 

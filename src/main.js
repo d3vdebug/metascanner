@@ -250,38 +250,21 @@ async function reverseGeocode(lat, lon) {
     }
 }
 
-async function saveHistory(lat, lon, address, metadata, imagePreview) {
+// --- REVISED: This function now updates the entire history array in Firestore ---
+async function updateHistoryInFirestore(updatedHistory) {
     const user = auth.currentUser;
     if (!user) return;
-    
-    const newHistoryItem = {
-        latitude: lat,
-        longitude: lon,
-        address: address || 'Unknown Location',
-        timestamp: new Date(),
-        metadata: metadata || {},
-        imagePreview: imagePreview || null
-    };
 
     const historyRef = db.collection('userHistory').doc(user.uid);
-
     try {
-        const doc = await historyRef.get();
-        if (doc.exists) {
-            const existingHistory = doc.data().history || [];
-            const updatedHistory = [newHistoryItem, ...existingHistory];
-            if (updatedHistory.length > 50) {
-                updatedHistory.length = 50;
-            }
-            await historyRef.update({ history: updatedHistory });
-        } else {
-            await historyRef.set({ history: [newHistoryItem] });
-        }
-        console.log("History saved successfully to Firestore.");
+        await historyRef.update({ history: updatedHistory });
+        console.log("History updated successfully in Firestore.");
     } catch (error) {
-        console.error("Error saving history to Firestore:", error);
+        console.error("Error updating history in Firestore:", error);
+        showMessage("ERROR: COULD NOT SYNC DELETION.", 'error');
     }
 }
+
 
 function extractAndFormatMetadata(data, fileSize, address) {
   const newMetadata = {}; 
@@ -369,7 +352,25 @@ async function processFile(file) {
 
     const formattedMetadata = extractAndFormatMetadata(exifData, file.size, address);
     extractedMetadata = formattedMetadata;
-    await saveHistory(lat, lon, address, formattedMetadata, compressedPreview);
+    
+    const newHistoryItem = {
+        latitude: lat,
+        longitude: lon,
+        address: address || 'Unknown Location',
+        timestamp: new Date(),
+        metadata: formattedMetadata || {},
+        imagePreview: compressedPreview || null
+    };
+
+    userHistoryCache.unshift(newHistoryItem);
+    if (userHistoryCache.length > 50) {
+        userHistoryCache.length = 50;
+    }
+    
+    // Pass the entire updated cache to be saved
+    await updateHistoryInFirestore(userHistoryCache);
+    
+    renderHistoryList();
 
     infoSection.classList.remove('hidden');
     updateMetadataDisplay();
@@ -602,6 +603,33 @@ async function analyzeImageAI(base64ImageData, locationName, coords) {
 }
 
 // --- Event Listeners ---
+
+// --- REVISED: Now includes a delete button in the list item ---
+function renderHistoryList() {
+    historyList.innerHTML = '';
+    if (userHistoryCache.length === 0) {
+        historyList.innerHTML = '<li>NO HISTORY FOUND.</li>';
+    } else {
+        userHistoryCache.forEach((item, index) => {
+            const li = document.createElement('li');
+            li.dataset.index = index;
+            // Handle both Firestore Timestamps and JS Dates
+            const date = item.timestamp.toDate ? item.timestamp.toDate().toLocaleString() : new Date(item.timestamp).toLocaleString();
+            li.innerHTML = `
+                <div>
+                    <span class="history-address">${item.address}</span>
+                    <span class="history-date">${date}</span>
+                </div>
+                <button class="history-item-delete" data-delete-index="${index}" title="Delete Entry">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                </button>
+            `;
+            historyList.appendChild(li);
+        });
+    }
+}
+
+
 logoutBtn.addEventListener('click', performLogout);
 exportJsonBtn.addEventListener('click', exportMetadataAsJson);
 mapTypeSelect.addEventListener('change', (e) => switchMapLayer(e.target.value));
@@ -639,18 +667,7 @@ historyBtn.addEventListener('click', async () => {
         const doc = await db.collection('userHistory').doc(user.uid).get();
         if (doc.exists) {
             userHistoryCache = doc.data().history || [];
-            historyList.innerHTML = '';
-            if (userHistoryCache.length === 0) {
-                 historyList.innerHTML = '<li>NO HISTORY FOUND.</li>';
-            } else {
-                userHistoryCache.forEach((item, index) => {
-                    const li = document.createElement('li');
-                    li.dataset.index = index;
-                    const date = item.timestamp.toDate().toLocaleString();
-                    li.innerHTML = `<span class="history-address">${item.address}</span><span class="history-date">${date}</span>`;
-                    historyList.appendChild(li);
-                });
-            }
+            renderHistoryList();
         } else {
             historyList.innerHTML = '<li>NO HISTORY FOUND.</li>';
             userHistoryCache = [];
@@ -664,7 +681,27 @@ historyBtn.addEventListener('click', async () => {
 closeHistoryBtn.addEventListener('click', closeHistorySidebar);
 sidebarOverlay.addEventListener('click', closeHistorySidebar);
 
+// --- REVISED: This listener now handles both viewing and deleting ---
 historyList.addEventListener('click', (e) => {
+    const deleteBtn = e.target.closest('.history-item-delete');
+
+    if (deleteBtn) {
+        e.stopPropagation(); // Prevent the view action from firing
+        const indexToDelete = parseInt(deleteBtn.dataset.deleteIndex, 10);
+        
+        // Remove from local cache
+        userHistoryCache.splice(indexToDelete, 1);
+        
+        // Re-render the UI immediately
+        renderHistoryList();
+        
+        // Sync the deletion with Firestore
+        updateHistoryInFirestore(userHistoryCache);
+        
+        showMessage("History entry deleted.", 'toast-success');
+        return;
+    }
+
     const li = e.target.closest('li');
     if (!li || li.dataset.index === undefined) return;
 
@@ -720,18 +757,14 @@ historyList.addEventListener('click', (e) => {
     toggleRawMetadataBtn.classList.add('hidden');
     exportJsonBtn.classList.add('hidden');
     
-    // --- REVISED: AI Button Logic for History ---
     if (item.imagePreview) {
-        // We have a saved image, so show the AI button and wire it up
         analyzeImageAIBtn.classList.remove('hidden');
         const historyCoords = (typeof lat === 'number' && typeof lon === 'number') ? { lat, lon } : null;
         analyzeImageAIBtn.onclick = () => analyzeImageAI(item.imagePreview, item.address, historyCoords);
         
-        // Hide the output div until the user clicks the button
         aiAnalysisOutput.classList.add('hidden');
         aiAnalysisOutput.innerHTML = '';
     } else {
-        // No saved image, so hide the AI button
         analyzeImageAIBtn.classList.add('hidden');
         aiAnalysisOutput.classList.add('hidden');
         aiAnalysisOutput.innerHTML = '';
