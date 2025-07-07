@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ImageTrace</title>
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Michroma&display=swap" rel="stylesheet">
+  
+  <!-- External Libraries -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  
+  <!-- Custom Stylesheet (Imported in main.js) -->
+  
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-firestore-compat.js"></script>
+</head>
+<body>
+    <nav class="navbar">
+        <a href="#" class="navbar-brand">METASCAN</a>
+        <button class="hamburger-menu" id="hamburgerMenu" aria-label="Toggle navigation menu">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucude-menu"><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="18" x2="20" y2="18"/></svg>
+        </button>
+
+        <div class="navbar-links" id="navbarLinks">
+            <button id="historyBtn">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                HISTORY
+            </button>
+        </div>
+            
+        <div class="profile-dropdown" id="profileDropdown">
+            <div class="profile-icon" id="profileIcon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-user"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            </div>
+            <div class="dropdown-content" id="profileDropdownContent">
+                <span id="currentUserEmail"></span>
+                <button id="logoutBtn">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-log-out"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="17 16 22 12 17 8"/><line x1="22" x2="10" y1="12" y2="12"/></svg>
+                    LOGOUT
+                </button>
+            </div>
+        </div>
+    </nav>
+
+  <div class="main-content-wrapper">
+    <h1>IMAGETRACER</h1>
+    <p>UPLOAD IMAGE FILE TO ANALYZE METADATA, LOCATE GPS COORDINATES</p>
+
+    <div class="button-group">
+      <label for="imgInput" class="custom-file-input" id="uploadFileLabel">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-upload"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+        UPLOAD IMAGE
+      </label>
+      <input type="file" id="imgInput" accept="image/*">
+    
+      <button id="resetBtn">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-rotate-ccw"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.79 2.91L3 12Z"/><path d="M3 3v5h5"/></svg>
+        RESET SYSTEM
+      </button>
+    </div>
+  
+    <div id="reversedGeocodingOutput" class="hidden"></div>
+
+    <div class="map-box">
+      <div class="map-box-head">
+          <div class="map-coords-header map-selector-group">
+            <span id="mapHeaderCoords"></span>
+          </div>
+          <div class="map-selector-group">
+              <label for="mapTypeSelect"></label>
+              <select id="mapTypeSelect">
+                <option value="streets">STREET</option>
+                <option value="satellite" selected>SATELLITE</option>
+                <option value="topography">TOPOGRAPH</option>
+              </select>
+          </div>
+      </div>
+      <div id="map">
+        <button id="viewOnGoogleMapsBtn" class="google-maps-icon-button hidden" title="Open In Google Maps">
+          <img src="/assets/icons8-google-maps.svg" alt="Google Maps">
+        </button>
+        <button id="analyzeImageAIBtn" class="hidden" title="Analyze Image with AI">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-bot"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 11v5"/><path d="M9 11v5"/></svg>
+        </button>
+      </div>
+      <div id="aiAnalysisOutput" class="hidden"></div>
+    </div>
+
+    <div id="messageBox" class="hidden" role="alert"></div>
+
+    <div id="toastNotification">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check-circle"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>
+      <span id="toastMessage"></span>
+    </div>
+
+    <div class="info-section hidden" id="infoSection">
+      <div class="image-location-wrapper">
+        <div class="image-location-wrapper-box">
+          <img id="uploadedImagePreview" class="hidden" alt="Uploaded Image Preview">
+          <div class="location-details">
+              <div id="coordinates-text" class="coordinates-section"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="metadata-header">
+        <div class="metadata-title">IMAGE METADATA LOG</div>
+        <button id="toggleRawMetadataBtn">VIEW RAW DATA</button>
+      </div>
+
+      <div id="metadata"></div>
+      <div id="rawMetadataOutput" class="hidden"></div>
+
+      <button id="downloadPdfBtn" class="hidden">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-download"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+        DOWNLOAD METADATA
+      </button>
+    </div>
+  </div> 
+
+  <footer class="footer-section">
+    <div style="font-size: 0.75rem; font-family: 'Share Tech Mono', monospace;">METASCANNER © 2025 | MADE WITH ❤️ BY <span style="margin-left: 2px;"><a href="https://github.com/debmalyamondal">TEAM DELTA</a></span></div>
+  </footer>
+
+  <!-- History Sidebar -->
+  <div id="sidebar-overlay"></div>
+  <aside id="historySidebar">
+      <div class="history-sidebar-header">
+          <h2>HISTORY</h2>
+          <button id="closeHistoryBtn" title="Close History">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
+      </div>
+      <ul id="historyList">
+          <!-- History items will be populated here by JavaScript -->
+      </ul>
+  </aside>
+
+  <!-- External JavaScript Libraries -->
+  <script src="https://unpkg.com/exifr"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  
+  <!-- Custom JavaScript -->
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

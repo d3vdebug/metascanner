@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ImageTrace - Authentication</title>
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Michroma&display=swap" rel="stylesheet">
+  
+  <!-- Custom Stylesheet (Imported in auth.js) -->
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-auth-compat.js"></script>
+</head>
+<body>
+    <div style="width: 100%; max-width: 600px; display: flex; flex-direction: column; align-items: center;">
+        <h1>METASCANNER</h1>
+        <p>METADATA ANALYSIS AVAILABLE ONLY THROUGH SECURE CHANNELS</p>
+    </div>
+  
+  <!-- Authentication Section -->
+  <div class="auth-section">
+      <div id="userStatus" class="auth-status">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-user-x" style="vertical-align: middle; margin-right: 5px;"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="17" x2="22" y1="8" y2="13"/><line x1="22" x2="17" y1="8" y2="13"/></svg>
+          UNAUTHORIZED ACCESS. PLEASE LOG IN.
+      </div>
+
+      <div id="authForms">
+          <div class="auth-input-group">
+              <input type="email" id="emailInput" placeholder="ENTER EMAIL ADDRESS" required>
+              <input type="password" id="passwordInput"  placeholder="ENTER PASSWORD" required>
+              <label style="color: rgb(235, 38, 38);">
+                <input class="custom-checkbox" type="checkbox" id="showPasswordCheckbox">
+                SHOW PASSWORD
+              </label>
+          </div>
+          <div class="button-group auth-buttons">
+              <button id="signUpBtn">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-user-plus"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/></svg>
+                SIGN UP
+              </button>
+              <button id="signInBtn">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-log-in"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" x2="3" y1="12" y2="12"/></svg>
+                SIGN IN
+              </button>
+          </div>
+      </div>
+
+      <div id="loggedInControls" class="hidden button-group auth-buttons">
+          <button id="signOutBtn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-log-out"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="17 16 22 12 17 8"/><line x1="22" x2="10" y1="12" y2="12"/></svg>
+            SIGN OUT
+          </button>
+      </div>
+  </div>
+  <!-- END Authentication Section -->
+    
+    <!-- Message box for status and errors -->
+    <div id="messageBox" class="hidden" role="alert"></div>
+
+    <footer class="footer-section">
+      <div style="font-size: 0.75rem; font-family: 'Share Tech Mono', monospace;">METASCANNER © 2025 | MADE WITH ❤️ BY <span style="margin-left: 2px;"><a style="text-decoration: none;  color: #ff5e00;" href="https://github.com/debmalyamondal">TEAM DELTA</a></span></div>
+    </footer>
+
+  <!-- Custom JavaScript -->
+  <script type="module" src="/src/auth.js"></script>
+
+</body>
+</html>

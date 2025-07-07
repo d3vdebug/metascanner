@@ -1,0 +1,245 @@
+    /* General body styling for gloomy hacker vibe */
+    body {
+      font-family: 'Share Tech Mono', monospace;
+      min-height: 100vh; 
+      background-color: #0A0A0A; /* Very dark black */
+      color: #E0E0E0; /* Off-white text for contrast */
+      cursor: crosshair; /* Hacker cursor */
+      /* Subtle grid pattern */
+      background-image: url('data:image/svg+xml;utf8,<svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M 0 0 L 16 0 M 0 16 L 16 16 M 0 0 L 0 16 M 16 0 L 16 16" fill="none" stroke="%23003300" stroke-width="0.5"/></svg>');
+      background-repeat: repeat;
+      background-size: 16px 16px;
+      text-shadow: 0 0 0.5px #E0E0E0; /* Very subtle white text glow */
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 1.5rem;
+      margin: 0;
+      box-sizing: border-box;
+    }
+    
+    /* Main heading styling */
+    h1 {
+      font-family: 'Michroma', sans-serif; /* Applied Michroma font */
+      color: #00CC00; /* Muted neon green for main title */
+      text-shadow: 0 0 3px #00CC00, 0 0 8px #00CC00; /* Subtle green glow for title */
+      font-size: 3rem; /* text-4xl */
+      font-weight: 800; /* font-extrabold */
+      margin-bottom: 1rem; /* mb-4 */
+      letter-spacing: 0.07em; /* tracking-wider */
+      text-align: center;
+    }
+    @media (max-width: 640px) {
+    h1 {
+      font-size: 2rem; /* Adjusted size for smaller screens */
+    }
+    }
+
+    /* Paragraph description styling */
+    p {
+      color: #A0A0A0; /* Light gray for body text */
+      font-size: 1.125rem; /* text-lg */
+      margin-bottom: 2rem; /* mb-8 */
+      max-width: 42rem; /* max-w-2xl */
+      text-align: center;
+      color: #9ca3af; /* text-gray-400 */
+      line-height: 1.5;
+    }
+
+    /* Flex container for buttons */
+    .button-group {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      margin-bottom: 10px; /* mb-8 */
+    }
+
+    /* Message box styling for different types */
+    #messageBox {
+      background-color: #1A1A1A; /* Dark background */
+      border: 1px solid; /* Defined by type */
+      color: #E0E0E0; /* Off-white default text */
+      text-shadow: 0 0 1px #E0E0E0;
+      box-shadow: 0 0 8px rgba(0, 204, 0, 0.4);
+      padding: 12px; /* p-5 */
+      border-radius: 0.5rem; /* rounded-lg */
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.2); /* shadow-xl */
+      font-size: 1.125rem; /* text-lg */
+      text-align: center;
+      max-width: 28rem; /* max-w-md */
+      width: 100%;
+      position: absolute;
+      display: flex; /* flex */
+      align-items: center; /* items-center */
+      justify-content: center; /* justify-center */
+    }
+    #messageBox.hidden {
+      display: none;
+    }
+    #messageBox.info-message { /* Info */
+      border-color: #00AA00; /* Muted green border */
+      color: #00FF00; /* Brighter green text */
+      text-shadow: 0 0 1px #00FF00;
+      box-shadow: 0 0 8px rgba(0, 255, 0, 0.5);
+    }
+    /* Error messages will continue to use messageBox */
+    #messageBox.error-message { /* Error */
+      border-color: #CC0000;
+      color: #FF0000;
+      text-shadow: 0 0 1px #FF0000;
+      box-shadow: 0 0 8px rgba(255, 0, 0, 0.5);
+    }
+
+    /* Spinner animation */
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    .spinner {
+      border: 4px solid rgba(0, 170, 0, 0.2); /* Lighter muted green */
+      border-left-color: #00AA00; /* Muted green */
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      animation: spin 1s linear infinite;
+      margin-right: 0.75rem; /* mr-3 */
+    }
+
+    /* Button styling (general for reset and download, and LLM/Google Maps) */
+    button {
+      background-color: #1A1A1A; /* Dark background */
+      color: #00CC00; /* Muted green text */
+      border: 1px solid #00AA00; /* Muted green border */
+      box-shadow: 0 0 5px rgba(0, 204, 0, 0.5);
+      transition: all 0.2s ease-out;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem; /* gap-2 */
+      padding: 0.75rem 1.5rem; /* px-6 py-3 */
+      border-radius: 0.5rem; /* rounded-lg */
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #2A2A2A;
+      color: #00FF00;
+      box-shadow: 0 0 10px rgba(0, 255, 0, 0.7);
+      border-color: #00FF00;
+      transform: translateY(-2px);
+    }
+    button:active {
+      transform: translateY(0);
+      box-shadow: 0 0 3px rgba(0, 204, 0, 0.3);
+    }
+    button:disabled {
+      background-color: #333333;
+      color: #666666;
+      border-color: #555555;
+      box-shadow: none;
+      cursor: not-allowed;
+      transform: none;
+    }
+    button.hidden {
+      display: none;
+    }
+
+    /* Auth Section Styling */
+    .auth-section {
+        background-color: #1A1A1A;
+        border: 1px solid #00AA00;
+        box-shadow: 0 0 10px rgba(0, 204, 0, 0.5);
+        border-radius: 0.75rem;
+        padding: 1rem 1.5rem; /* px-6 py-4 */
+        margin-top: 1.5rem; /* mt-6 */
+        margin-bottom: 1.5rem; /* mb-6 */
+        max-width: 42rem; /* max-w-2xl */
+        width: fit-content;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1rem; /* gap-4 */
+        text-align: center;
+    }
+
+    .auth-status {
+        color: #FF0000; /* Red for unauthorized, will change to green on login */
+        font-size: 1.125rem; /* text-lg */
+        margin-bottom: 0.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-shadow: 0 0 3px #FF0000;
+        line-height: 1.5;
+    }
+
+    .auth-input-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.55rem; /* gap-3 */
+        width: 100%;
+        max-width: 300px;
+    }
+
+    .auth-input-group input {
+        font-family: 'Share Tech Mono', monospace;
+        background-color: #0A0A0A; /* Darker input background */
+        border: 1px solid #005500; /* Darker green border */
+        color: #00FF00; /* Green text */
+        padding: 0.75rem 1rem; /* py-3 px-4 */
+        border-radius: 0.5rem; /* rounded-lg */
+        font-size: 1rem;
+        outline: none;
+        box-shadow: 0 0 5px rgba(0, 204, 0, 0.3);
+        transition: all 0.2s ease-out;
+    }
+
+    .auth-input-group input::placeholder {
+        color: #008800; /* Muted green placeholder */
+    }
+
+    .auth-input-group input:focus {
+        border-color: #00FF00;
+        box-shadow: 0 0 8px rgba(0, 255, 0, 0.5);
+    }
+
+    .auth-buttons {
+        width: 100%;
+        margin-top: 10px;
+        max-width: 300px; /* Limit width of buttons */
+        justify-content: center; /* Center buttons within their container */
+    }
+
+    .auth-buttons button {
+        flex-grow: 1; /* Allow buttons to grow evenly */
+        min-width: 120px; /* Ensure a minimum width */
+    }
+    
+    /* Updated footer styling */
+    .footer-section{
+      margin-top: auto; /* Push footer to the bottom */
+      position: relative; 
+      width: 100%; 
+      text-align: center; 
+    }
+    #loggedInControls{
+        display: none;
+    }
+
+    #authForms{
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      width: 100%;
+      max-width: 300px;
+    }
+    .custom-checkbox{
+      color: #00FF00;
+      
+    }
+    
+    
