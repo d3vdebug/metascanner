@@ -73,13 +73,33 @@ const tileLayers = {
     'topography': L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { attribution: '', noWrap: true })
 };
 
-// --- Authentication and User Functions ---
 
+// --- FIX: New function to load history from Firestore into the local cache ---
+async function loadUserHistory(user) {
+    if (!user) return;
+    try {
+        const doc = await db.collection('userHistory').doc(user.uid).get();
+        if (doc.exists) {
+            userHistoryCache = doc.data().history || [];
+        } else {
+            userHistoryCache = [];
+        }
+    } catch (error) {
+        console.error("Error fetching initial history:", error);
+        userHistoryCache = []; // Ensure cache is empty on error
+    }
+    renderHistoryList(); // Render the list once loaded
+}
+
+
+// --- REVISED: Auth state listener now pre-loads history ---
 auth.onAuthStateChanged((user) => {
     if (!user) {
         window.location.href = 'auth.html'; 
     } else {
         currentUserEmailSpan.textContent = `USER: ${user.email.toUpperCase()}`;
+        // --- FIX: Pre-load the user's history as soon as they are authenticated ---
+        loadUserHistory(user);
     }
 });
 
@@ -250,18 +270,18 @@ async function reverseGeocode(lat, lon) {
     }
 }
 
-// --- REVISED: This function now updates the entire history array in Firestore ---
-async function updateHistoryInFirestore(updatedHistory) {
+async function syncHistoryWithFirestore(historyData) {
     const user = auth.currentUser;
     if (!user) return;
 
     const historyRef = db.collection('userHistory').doc(user.uid);
     try {
-        await historyRef.update({ history: updatedHistory });
-        console.log("History updated successfully in Firestore.");
+        // Use set to ensure the document exists, and overwrite the history field
+        await historyRef.set({ history: historyData }, { merge: true });
+        console.log("History synchronized successfully with Firestore.");
     } catch (error) {
-        console.error("Error updating history in Firestore:", error);
-        showMessage("ERROR: COULD NOT SYNC DELETION.", 'error');
+        console.error("Error syncing history with Firestore:", error);
+        showMessage("ERROR: COULD NOT SYNC HISTORY.", 'error');
     }
 }
 
@@ -367,8 +387,7 @@ async function processFile(file) {
         userHistoryCache.length = 50;
     }
     
-    // Pass the entire updated cache to be saved
-    await updateHistoryInFirestore(userHistoryCache);
+    await syncHistoryWithFirestore(userHistoryCache);
     
     renderHistoryList();
 
@@ -604,7 +623,6 @@ async function analyzeImageAI(base64ImageData, locationName, coords) {
 
 // --- Event Listeners ---
 
-// --- REVISED: Now includes a delete button in the list item ---
 function renderHistoryList() {
     historyList.innerHTML = '';
     if (userHistoryCache.length === 0) {
@@ -613,10 +631,10 @@ function renderHistoryList() {
         userHistoryCache.forEach((item, index) => {
             const li = document.createElement('li');
             li.dataset.index = index;
-            // Handle both Firestore Timestamps and JS Dates
+            // Handle both Firestore Timestamps and JS Dates for robust rendering
             const date = item.timestamp.toDate ? item.timestamp.toDate().toLocaleString() : new Date(item.timestamp).toLocaleString();
             li.innerHTML = `
-                <div>
+                <div class="history-item-content">
                     <span class="history-address">${item.address}</span>
                     <span class="history-date">${date}</span>
                 </div>
@@ -654,49 +672,26 @@ input.addEventListener("change", function () {
 });
 resetBtn.addEventListener("click", resetApplication);
 
-historyBtn.addEventListener('click', async () => {
-    const user = auth.currentUser;
-    if (!user) return;
-
+// --- REVISED: historyBtn listener is now very simple ---
+historyBtn.addEventListener('click', () => {
     historySidebar.classList.add('open');
     sidebarOverlay.classList.add('visible');
     profileDropdownContent.classList.remove('show'); 
-
-    historyList.innerHTML = '<li>FETCHING HISTORY...</li>';
-    try {
-        const doc = await db.collection('userHistory').doc(user.uid).get();
-        if (doc.exists) {
-            userHistoryCache = doc.data().history || [];
-            renderHistoryList();
-        } else {
-            historyList.innerHTML = '<li>NO HISTORY FOUND.</li>';
-            userHistoryCache = [];
-        }
-    } catch (error) {
-        console.error("Error fetching history:", error);
-        historyList.innerHTML = '<li>ERROR LOADING HISTORY.</li>';
-    }
 });
 
 closeHistoryBtn.addEventListener('click', closeHistorySidebar);
 sidebarOverlay.addEventListener('click', closeHistorySidebar);
 
-// --- REVISED: This listener now handles both viewing and deleting ---
 historyList.addEventListener('click', (e) => {
     const deleteBtn = e.target.closest('.history-item-delete');
 
     if (deleteBtn) {
-        e.stopPropagation(); // Prevent the view action from firing
+        e.stopPropagation();
         const indexToDelete = parseInt(deleteBtn.dataset.deleteIndex, 10);
         
-        // Remove from local cache
         userHistoryCache.splice(indexToDelete, 1);
-        
-        // Re-render the UI immediately
         renderHistoryList();
-        
-        // Sync the deletion with Firestore
-        updateHistoryInFirestore(userHistoryCache);
+        syncHistoryWithFirestore(userHistoryCache);
         
         showMessage("History entry deleted.", 'toast-success');
         return;
