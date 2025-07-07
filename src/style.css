@@ -975,6 +975,10 @@ button.hidden { display: none; }
   
   .navbar {
       flex-wrap: wrap;
+
+      a{
+          font-size: 0.9rem;
+      }
   }
   .navbar-brand {
       margin-right: auto;
