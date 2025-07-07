@@ -263,7 +263,7 @@ p {
 
 .button-group {
   display: flex;
-  flex-wrap: wrap;
+  
   justify-content: center;
   gap: 10px;
   width: 100%;
@@ -1023,5 +1023,31 @@ button.hidden { display: none; }
 
   .history-item-delete{
     opacity: 1;
+  }
+
+  .custom-file-input {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    text-align: center;
+    flex: 1;
+    font-size: 0.9rem;
+  }
+
+  #resetBtn{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    text-align: center;
+    flex: 1;
+    font-size: 0.8rem;
+  }
+
+  button{
+    font-weight: 300;
+    font-size: 0.7rem;
+    padding: 0.5rem 1rem;
   }
 }
