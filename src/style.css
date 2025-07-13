@@ -1,6 +1,6 @@
 /* General body styling for gloomy hacker vibe */
 body {
-  font-family: 'Share Tech Mono', monospace;
+  font-family: 'Share Tech Mono', 'share tech', monospace;
   min-height: 100vh;
   background-color: #0A0A0A;
   color: #E0E0E0;
