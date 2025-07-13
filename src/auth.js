@@ -1,13 +1,13 @@
 import './auth.css';
 
-// !!! IMPORTANT: REPLACE WITH YOUR ACTUAL FIREBASE CONFIGURATION IF NEEDED !!!
+
 const firebaseConfig = {
-    apiKey: "AIzaSyB0APY2yqEJpvm6zpA6QotwlZ-yW5-16ck", // Replace with your actual API Key
-    authDomain: "imagetraceapp.firebaseapp.com",
-    projectId: "imagetraceapp",
-    storageBucket: "imagetraceapp.firebasestorage.app",
-    messagingSenderId: "804236575302",
-    appId: "1:804236575302:web:956aa0cd72b298a8620047"
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
 // Initialize Firebase

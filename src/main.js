@@ -1,19 +1,8 @@
 import './style.css';
 
-// Firebase configuration - Replace with your actual API Key if using a different project
-const firebaseConfig = {
-    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-    appId: import.meta.env.VITE_FIREBASE_APP_ID
-};
-
-// Initialize Firebase
-firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
-const db = firebase.firestore();
+// Import modularized logic
+import { initFirebaseAuth, performLogout, loadUserHistory, syncHistoryWithFirestore } from './firebase.js';
+import { analyzeImageWithAI, initializeChatbot, resetChatbot } from './bot.js';
 
 // --- DOM Elements ---
 const input = document.getElementById("imgInput");
@@ -38,7 +27,6 @@ const mapHeaderCoords = document.getElementById("mapHeaderCoords");
 const toastNotification = document.getElementById("toastNotification"); 
 const toastMessage = document.getElementById("toastMessage"); 
 const viewOnGoogleMapsBtn = document.getElementById('viewOnGoogleMapsBtn'); 
-const uploadFileLabel = document.getElementById('uploadFileLabel'); 
 const analyzeImageAIBtn = document.getElementById('analyzeImageAIBtn');
 const aiAnalysisOutput = document.getElementById('aiAnalysisOutput');
 
@@ -49,6 +37,16 @@ const currentUserEmailSpan = document.getElementById('currentUserEmail');
 const logoutBtn = document.getElementById('logoutBtn'); 
 const hamburgerMenu = document.getElementById('hamburgerMenu'); 
 const navbarLinks = document.getElementById('navbarLinks'); 
+
+// --- Chatbot DOM Elements (Grouped for easier passing) ---
+const chatbotElements = {
+    toggle: document.getElementById('chatbotToggle'),
+    window: document.getElementById('chatWindow'),
+    close: document.getElementById('closeChat'),
+    messages: document.getElementById('chatMessages'),
+    input: document.getElementById('chatInput'),
+    sendBtn: document.getElementById('sendMessageBtn')
+};
 
 const OPENCAGE_API_KEY = import.meta.env.VITE_OPENCAGE_API_KEY;
 
@@ -73,48 +71,34 @@ const tileLayers = {
     'topography': L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { attribution: '', noWrap: true })
 };
 
-
-// --- FIX: New function to load history from Firestore into the local cache ---
-async function loadUserHistory(user) {
-    if (!user) return;
-    try {
-        const doc = await db.collection('userHistory').doc(user.uid).get();
-        if (doc.exists) {
-            userHistoryCache = doc.data().history || [];
-        } else {
-            userHistoryCache = [];
-        }
-    } catch (error) {
-        console.error("Error fetching initial history:", error);
-        userHistoryCache = []; // Ensure cache is empty on error
-    }
-    renderHistoryList(); // Render the list once loaded
-}
-
-
-// --- REVISED: Auth state listener now pre-loads history ---
-auth.onAuthStateChanged((user) => {
+// --- Authentication Flow ---
+initFirebaseAuth(async (user) => {
     if (!user) {
         window.location.href = 'auth.html'; 
     } else {
         currentUserEmailSpan.textContent = `USER: ${user.email.toUpperCase()}`;
-        // --- FIX: Pre-load the user's history as soon as they are authenticated ---
-        loadUserHistory(user);
+        try {
+            userHistoryCache = await loadUserHistory(user);
+            renderHistoryList();
+        } catch (error) {
+            showMessage(error.message.toUpperCase(), 'error');
+            userHistoryCache = [];
+            renderHistoryList();
+        }
     }
 });
 
-const performLogout = async () => {
+logoutBtn.addEventListener('click', async () => {
     showMessage("LOGGING OUT...", 'info');
     try {
-        await auth.signOut();
+        await performLogout();
     } catch (error) {
         console.error("Sign out error:", error);
         showMessage(`LOGOUT ERROR: ${error.message.toUpperCase()}`, 'error');
     }
-};
+});
 
 // --- UI and Helper Functions ---
-
 function showMessage(message, type = 'info') {
   clearMessage();
   if (type === 'toast-success') {
@@ -156,20 +140,10 @@ function compressImage(base64String, quality = 0.7, maxDimension = 500) {
         img.src = `data:image/jpeg;base64,${base64String}`;
         img.onload = () => {
             let { width, height } = img;
-            if (width > height) {
-                if (width > maxDimension) {
-                    height = Math.round(height * (maxDimension / width));
-                    width = maxDimension;
-                }
-            } else {
-                if (height > maxDimension) {
-                    width = Math.round(width * (maxDimension / height));
-                    height = maxDimension;
-                }
-            }
+            if (width > height) { if (width > maxDimension) { height = Math.round(height * (maxDimension / width)); width = maxDimension; } }
+            else { if (height > maxDimension) { width = Math.round(width * (maxDimension / height)); height = maxDimension; } }
             const canvas = document.createElement('canvas');
-            canvas.width = width;
-            canvas.height = height;
+            canvas.width = width; canvas.height = height;
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, width, height);
             const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
@@ -215,7 +189,7 @@ function resetApplication() {
   input.value = '';
   uploadedImagePreview.src = '';
   uploadedImagePreview.classList.add('hidden');
-  document.getElementById('viewOnGoogleMapsBtn').classList.add('hidden'); 
+  viewOnGoogleMapsBtn.classList.add('hidden'); 
   coordinatesTextDiv.innerHTML = "";
   reversedGeocodingOutput.innerHTML = "";
   reversedGeocodingOutput.classList.add('hidden');
@@ -235,78 +209,63 @@ function resetApplication() {
   initializeWorldMap();
   updateMetadataDisplay();
   profileDropdownContent.classList.remove('show');
+  
   analyzeImageAIBtn.classList.add('hidden');
   aiAnalysisOutput.classList.add('hidden');
   aiAnalysisOutput.innerHTML = '';
+  chatbotElements.toggle.classList.remove('visible');
+  chatbotElements.window.classList.remove('open');
+  resetChatbot();
 }
 
 // --- API and Data Processing Functions ---
-
 async function reverseGeocode(lat, lon) {
     if (!OPENCAGE_API_KEY) { 
         console.warn("OpenCage API Key not configured.");
         reversedGeocodingOutput.innerHTML = `<p><em>REVERSE GEOCODING API KEY MISSING.</em></p>`;
-        reversedGeocodingOutput.classList.remove('hidden');
         return 'API Key Missing';
     }
     const url = `https://api.opencagedata.com/geocode/v1/json?q=${lat}+${lon}&key=${OPENCAGE_API_KEY}`;
     try {
         const response = await fetch(url);
         const data = await response.json();
-        if (data.results && data.results.length > 0 && data.results[0].formatted) {
+        if (data.results?.[0]?.formatted) {
             const formatted = data.results[0].formatted;
             reversedGeocodingOutput.innerHTML = `<p>${formatted}</p>`;
-            reversedGeocodingOutput.classList.remove('hidden');
             return formatted;
         }
         reversedGeocodingOutput.innerHTML = `<p><em>NO HUMAN-READABLE LOCATION FOUND.</em></p>`;
-        reversedGeocodingOutput.classList.remove('hidden');
         return 'Location Not Found';
     } catch (error) {
         console.error("Error during reverse geocoding:", error);
         reversedGeocodingOutput.innerHTML = `<p><em>REVERSE GEOCODING ERROR.</em></p>`;
-        reversedGeocodingOutput.classList.remove('hidden');
         return 'Geocoding Error';
+    } finally {
+        reversedGeocodingOutput.classList.remove('hidden');
     }
 }
-
-async function syncHistoryWithFirestore(historyData) {
-    const user = auth.currentUser;
-    if (!user) return;
-
-    const historyRef = db.collection('userHistory').doc(user.uid);
-    try {
-        // Use set to ensure the document exists, and overwrite the history field
-        await historyRef.set({ history: historyData }, { merge: true });
-        console.log("History synchronized successfully with Firestore.");
-    } catch (error) {
-        console.error("Error syncing history with Firestore:", error);
-        showMessage("ERROR: COULD NOT SYNC HISTORY.", 'error');
-    }
-}
-
 
 function extractAndFormatMetadata(data, fileSize, address) {
   const newMetadata = {}; 
   if (data?.latitude && data?.longitude) {
     newMetadata['Coordinates'] = `${data.latitude.toFixed(6)}, ${data.longitude.toFixed(6)}`;
   }
-  if (address && address !== 'Location Not Found' && address !== 'Geocoding Error' && address !== 'API Key Missing') {
+  if (address && !['Location Not Found', 'Geocoding Error', 'API Key Missing'].includes(address)) {
     newMetadata['REVERSED GEOLOCATION'] = address.trim();
   }
   if (fileSize !== undefined && fileSize !== null) {
     newMetadata['File Size'] = formatBytes(fileSize);
   }
   const metaToProcess = {
-    'Make': data?.Make, 'Model': data?.Model, 'Date/Time Original': data?.DateTimeOriginal, 'Exposure Time': data?.ExposureTime ? `${data.ExposureTime}s` : null, 'F-Number': data?.FNumber ? `f/${data.FNumber}` : null, 'ISO Speed Ratings': data?.ISOSpeedRatings, 'Focal Length': data?.FocalLength ? `${data.FocalLength}mm` : null, 'GPS Altitude': data?.GPSAltitude ? `${data.GPSAltitude.toFixed(2)}m` : null, 'GPS Speed': data?.GPSSpeed ? `${data.GPSSpeed.toFixed(2)} km/h` : null, 'GPS Image Direction': data?.GPSImgDirection ? `${data.GPSImgDirection.toFixed(2)}°` : null, 'GPS DOP (Precision)': data?.GPSDOP ? data.GPSDOP.toFixed(2) : null, 'Lens Make': data?.LensMake, 'Lens Model': data?.LensModel, 'Software': data?.Software, 'Orientation': data?.Orientation, 'Color Space': data?.ColorSpace, 'Pixel X Dimension': data?.PixelXDimension, 'Pixel Y Dimension': data?.PixelYDimension, 'X Resolution': data?.XResolution ? `${data.XResolution} DPI` : null, 'Y Resolution': data?.YResolution ? `${data.YResolution} DPI` : null, 'Creator': data?.Creator, 'Headline': data?.Headline, 'Description': data?.Description, 'Copyright': data?.Copyright, 'Flash': data?.Flash ? (data.Flash & 1 ? 'FLASH FIRED' : 'FLASH NOT FIRED') : null, 'Image Width': data?.ImageWidth, 'Image Height': data?.ImageHeight,
+    'Make': data?.Make, 'Model': data?.Model, 'Date/Time Original': data?.DateTimeOriginal, 'Exposure Time': data?.ExposureTime ? `${data.ExposureTime}s` : null, 'F-Number': data?.FNumber ? `f/${data.FNumber}` : null, 'ISO Speed Ratings': data?.ISOSpeedRatings, 'Focal Length': data?.FocalLength ? `${data.FocalLength}mm` : null, 'GPS Altitude': data?.GPSAltitude ? `${data.GPSAltitude.toFixed(2)}m` : null, 'Software': data?.Software
   };
   for (const [key, value] of Object.entries(metaToProcess)) {
-    if (value !== undefined && value !== null && value !== '') {
-      let displayValue = value;
-      if (value instanceof Date) {
-        displayValue = value.toLocaleString('en-US', { hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      }
-      newMetadata[key] = String(displayValue).toUpperCase();
+    if (value) {
+        let displayValue = value;
+        if (value instanceof Date) {
+            displayValue = value.toLocaleString('en-US', { hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        }
+        newMetadata[key] = String(displayValue).toUpperCase();
     }
   }
   return newMetadata;
@@ -316,108 +275,95 @@ async function processFile(file) {
   if (!file) return;
   resetApplication(); 
   showMessage("ANALYZING IMAGE DATA...", 'info');
-
+  
   const reader = new FileReader();
-  reader.onload = (e) => {
-    uploadedImagePreview.src = e.target.result;
-    uploadedImagePreview.classList.remove('hidden');
-    currentImageBase64 = e.target.result.split(',')[1];
+  reader.onload = async (e) => {
+    try {
+        const imageDataUrl = e.target.result;
+        const fullResBase64 = imageDataUrl.split(',')[1];
+        
+        const [compressedData, exifData] = await Promise.all([
+            compressImage(fullResBase64).catch(err => { console.warn(err); return null; }),
+            exifr.parse(file, { iptc: true, xmp: true })
+        ]);
+
+        currentImageBase64 = compressedData;
+        rawExifData = exifData || {};
+
+        clearMessage();
+        uploadedImagePreview.src = imageDataUrl;
+        uploadedImagePreview.classList.remove('hidden');
+
+        const { latitude: lat, longitude: lon } = rawExifData;
+        let address = 'Location Not Found';
+
+        if (typeof lat === 'number' && typeof lon === 'number') {
+            currentLatLng = { lat, lon };
+            updateMapHeaderCoordinates(lat, lon);
+            coordinatesTextDiv.innerHTML = `<p>GPS COORDINATES: <span>${lat.toFixed(6)}, ${lon.toFixed(6)}</span></p>`;
+            address = await reverseGeocode(lat, lon);
+            viewOnGoogleMapsBtn.classList.remove('hidden');
+            viewOnGoogleMapsBtn.onclick = () => window.open(`https://www.google.com/maps/search/?api=1&query=${lat},${lon}`, '_blank');
+            map.setView([lat, lon], 15);
+            if (marker) marker.remove();
+            marker = L.marker([lat, lon], { icon: customGreenIcon }).addTo(map).bindPopup("IMAGE LOCATION").openPopup();
+        } else {
+            showMessage("NOTICE: GPS DATA NOT FOUND IN IMAGE.", 'info');
+            initializeWorldMap();
+            coordinatesTextDiv.innerHTML = `<p>GPS COORDINATES: <span>NOT FOUND</span></p>`;
+            reversedGeocodingOutput.innerHTML = `<p><em>NO REVERSED GEOLOCATION DATA.</em></p>`; 
+            reversedGeocodingOutput.classList.remove('hidden');
+        }
+
+        extractedMetadata = extractAndFormatMetadata(rawExifData, file.size, address);
+        
+        userHistoryCache.unshift({ latitude: lat, longitude: lon, address, timestamp: new Date(), metadata: extractedMetadata, imagePreview: currentImageBase64 });
+        if (userHistoryCache.length > 50) userHistoryCache.pop();
+        await syncHistoryWithFirestore(userHistoryCache).catch(err => showMessage(err.message.toUpperCase(), 'error'));
+        
+        renderHistoryList();
+        infoSection.classList.remove('hidden');
+        updateMetadataDisplay();
+
+        if (Object.keys(extractedMetadata).length > 0) {
+            downloadPdfBtn.classList.remove('hidden');
+            exportJsonBtn.classList.remove('hidden');
+            toggleRawMetadataBtn.classList.remove('hidden');
+            showMessage("ANALYSIS COMPLETE.", 'toast-success');
+        } else {
+            showMessage("ANALYSIS COMPLETE. NO METADATA FOUND.", 'toast-success');
+        }
+        
+        if (currentImageBase64) {
+            analyzeImageAIBtn.classList.remove('hidden');
+            analyzeImageAIBtn.onclick = () => handleAIAnalysis(address);
+        }
+        chatbotElements.toggle.classList.add('visible');
+        initializeChatbot(chatbotElements, () => ({ extractedMetadata, currentImageBase64 }));
+
+    } catch (err) {
+        console.error("File processing error:", err);
+        showMessage(`ERROR: ${err.message.toUpperCase()}. FILE FAILED.`, 'error');
+        resetApplication();
+    }
   };
   reader.readAsDataURL(file);
+}
 
-  try {
-    const exifData = await exifr.parse(file, { iptc: true, xmp: true });
-    rawExifData = exifData || {}; 
-    clearMessage();
-    const lat = exifData?.latitude;
-    const lon = exifData?.longitude;
-    let address = 'Location Not Found';
-    let compressedPreview = null;
-
-    if (currentImageBase64) {
-        try {
-            compressedPreview = await compressImage(currentImageBase64);
-        } catch (compressionError) {
-            console.warn("Image compression failed:", compressionError);
-        }
+async function handleAIAnalysis(address) {
+    if (!currentImageBase64) {
+        showMessage("NO IMAGE DATA FOR AI ANALYSIS.", 'error');
+        return;
     }
-    
-    if (typeof lat === 'number' && typeof lon === 'number') {
-        currentLatLng = { lat, lon };
-        updateMapHeaderCoordinates(lat, lon);
-        const gmapsLink = `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
-        coordinatesTextDiv.innerHTML = `<p>GPS COORDINATES: <span>${lat.toFixed(6)}, ${lon.toFixed(6)}</span></p>`;
-        
-        address = await reverseGeocode(lat, lon);
-
-        viewOnGoogleMapsBtn.classList.remove('hidden');
-        viewOnGoogleMapsBtn.onclick = () => window.open(gmapsLink, '_blank');
-        
-        if (map) {
-            map.setView([lat, lon], 15);
-            if (marker) { marker.remove(); }
-        } else {
-            map = L.map("map").setView([lat, lon], 15);
-            currentTileLayer = tileLayers[mapTypeSelect.value].addTo(map);
-        }
-        marker = L.marker([lat, lon], { icon: customGreenIcon }).addTo(map).bindPopup("IMAGE LOCATION").openPopup();
-    } else {
-        showMessage("NOTICE: GPS DATA NOT FOUND IN IMAGE.", 'info');
-        initializeWorldMap();
-        coordinatesTextDiv.innerHTML = `<p>GPS COORDINATES: <span>NOT FOUND</span></p>`;
-        reversedGeocodingOutput.innerHTML = `<p><em>NO REVERSED GEOLOCATION DATA.</em></p>`; 
-        reversedGeocodingOutput.classList.remove('hidden'); 
-        viewOnGoogleMapsBtn.classList.add('hidden');
+    aiAnalysisOutput.classList.remove('hidden');
+    aiAnalysisOutput.innerHTML = `<div class="spinner"></div> ANALYZING IMAGE WITH AI...`;
+    try {
+        const analysisText = await analyzeImageWithAI(currentImageBase64, address, currentLatLng);
+        aiAnalysisOutput.innerHTML = `<p><strong>AI ANALYSIS:</strong> ${analysisText}</p>`;
+    } catch (error) {
+        console.error("Error during AI analysis:", error);
+        aiAnalysisOutput.innerHTML = `<p><strong>AI ANALYSIS:</strong> <em>ERROR: ${error.message.toUpperCase()}.</em></p>`;
     }
-
-    const formattedMetadata = extractAndFormatMetadata(exifData, file.size, address);
-    extractedMetadata = formattedMetadata;
-    
-    const newHistoryItem = {
-        latitude: lat,
-        longitude: lon,
-        address: address || 'Unknown Location',
-        timestamp: new Date(),
-        metadata: formattedMetadata || {},
-        imagePreview: compressedPreview || null
-    };
-
-    userHistoryCache.unshift(newHistoryItem);
-    if (userHistoryCache.length > 50) {
-        userHistoryCache.length = 50;
-    }
-    
-    await syncHistoryWithFirestore(userHistoryCache);
-    
-    renderHistoryList();
-
-    infoSection.classList.remove('hidden');
-    updateMetadataDisplay();
-
-    if (Object.keys(extractedMetadata).length > 0 || Object.keys(rawExifData).length > 0) {
-        downloadPdfBtn.classList.remove('hidden');
-        exportJsonBtn.classList.remove('hidden');
-        toggleRawMetadataBtn.classList.remove('hidden'); 
-        showMessage("ANALYSIS COMPLETE. DATA RETRIEVED.", 'toast-success');
-    } else {
-        downloadPdfBtn.classList.add('hidden'); 
-        exportJsonBtn.classList.add('hidden');
-        toggleRawMetadataBtn.classList.add('hidden'); 
-        showMessage("ANALYSIS COMPLETE. NO METADATA FOUND.", 'toast-success');
-    }
-    
-    if (currentImageBase64) {
-        analyzeImageAIBtn.classList.remove('hidden');
-        analyzeImageAIBtn.onclick = () => analyzeImageAI(currentImageBase64, address, currentLatLng);
-    } else {
-        analyzeImageAIBtn.classList.add('hidden');
-    }
-
-  } catch (err) {
-    console.error("File processing error:", err); 
-    showMessage(`ERROR: ${err.message.toUpperCase()}. FILE PROCESSING FAILED.`, 'error');
-    resetApplication();
-  }
 }
       
 function updateMetadataDisplay() {
@@ -430,16 +376,13 @@ function updateMetadataDisplay() {
     rawMetadataOutput.classList.add('hidden');
     metadataDiv.classList.remove('hidden');
     metadataDiv.innerHTML = ''; 
-    let metadataFound = false;
-    const orderedKeys = ['Coordinates', 'REVERSED GEOLOCATION', ...Object.keys(extractedMetadata).filter(k => k !== 'Coordinates' && k !== 'REVERSED GEOLOCATION').sort()];
+    const orderedKeys = ['Coordinates', 'REVERSED GEOLOCATION', ...Object.keys(extractedMetadata).filter(k => !['Coordinates', 'REVERSED GEOLOCATION'].includes(k)).sort()];
     for (const key of orderedKeys) { 
-        const value = extractedMetadata[key];
-        if (value !== undefined && value !== null && value !== '') {
-            metadataDiv.innerHTML += `<p><strong>${key.toUpperCase()}:</strong> <span>${String(value).toUpperCase()}</span></p>`;
-            metadataFound = true;
+        if (extractedMetadata[key]) {
+            metadataDiv.innerHTML += `<p><strong>${key.toUpperCase()}:</strong> <span>${String(extractedMetadata[key]).toUpperCase()}</span></p>`;
         }
     }
-    if (!metadataFound) {
+    if (!metadataDiv.innerHTML.trim()) {
         metadataDiv.innerHTML = "<p class='italic'><em>NO METADATA FOUND.</em></p>";
     }
     toggleRawMetadataBtn.textContent = 'VIEW RAW DATA';
@@ -448,18 +391,20 @@ function updateMetadataDisplay() {
 
 // --- PDF and JSON Export Logic ---
 
+// Helper function for jsPDF to handle page breaks
 function checkAndAddPage(doc, yPos, requiredSpace) {
     const pageHeight = doc.internal.pageSize.getHeight();
     const bottomMargin = 40;
     if (yPos + requiredSpace > pageHeight - bottomMargin) {
         doc.addPage();
-        return 40;
+        return 40; // New yPos on the new page
     }
     return yPos;
 }
 
+// THIS IS THE CORRECTED PDF EXPORT LISTENER
 downloadPdfBtn.addEventListener("click", async () => {
-    if (Object.keys(rawExifData).length === 0 && !currentImageBase64 && Object.keys(extractedMetadata).length === 0) {
+    if (Object.keys(extractedMetadata).length === 0 && !currentImageBase64) {
         showMessage("NO DATA TO GENERATE PDF.", 'error');
         return;
     }
@@ -482,16 +427,13 @@ downloadPdfBtn.addEventListener("click", async () => {
             const imgDataUrl = uploadedImagePreview.src;
             const mimeTypeMatch = imgDataUrl.match(/^data:image\/(\w+);base64,/);
             const format = mimeTypeMatch ? mimeTypeMatch[1].toUpperCase() : 'JPEG';
-    
             const imgProps = doc.getImageProperties(imgDataUrl);
             let imgHeight = (imgProps.height * maxWidth) / imgProps.width;
             const maxHeightOnPage = doc.internal.pageSize.getHeight() - yPos - margin;
-    
             yPos = checkAndAddPage(doc, yPos, Math.min(imgHeight, maxHeightOnPage));
             if (imgHeight > maxHeightOnPage) {
                 imgHeight = maxHeightOnPage;
             }
-    
             doc.addImage(imgDataUrl, format, margin, yPos, maxWidth, imgHeight);
             yPos += imgHeight + 20;
         } catch (e) {
@@ -505,10 +447,8 @@ downloadPdfBtn.addEventListener("click", async () => {
         doc.setFontSize(titleFontSize);
         doc.text(title, margin, yPos);
         yPos += titleFontSize + 5;
-
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(fontSize);
-
         contentLines.forEach(line => {
             const splitLines = doc.splitTextToSize(line, maxWidth);
             splitLines.forEach(splitLine => {
@@ -524,11 +464,11 @@ downloadPdfBtn.addEventListener("click", async () => {
     const orderedKeys = ['Coordinates', 'REVERSED GEOLOCATION', ...Object.keys(extractedMetadata).filter(k => k !== 'Coordinates' && k !== 'REVERSED GEOLOCATION').sort()];
     for (const key of orderedKeys) {
         const value = extractedMetadata[key];
-        if (value !== undefined && value !== null && value !== '') {
+        if (value) {
             metadataLines.push(`${key.toUpperCase()}: ${String(value).toUpperCase()}`);
         }
     }
-    if(metadataLines.length > 0) {
+    if (metadataLines.length > 0) {
         addSection("Extracted Metadata", metadataLines, 9);
     }
 
@@ -539,7 +479,7 @@ downloadPdfBtn.addEventListener("click", async () => {
     
     if (Object.keys(rawExifData).length > 0) {
         const rawText = JSON.stringify(rawExifData, null, 2);
-        addSection("Raw Metadata (JSON)", [rawText], 6, 14); 
+        addSection("Raw Metadata (JSON)", [rawText], 6, 14);
     }
 
     doc.save("image_metadata_report.pdf");
@@ -547,114 +487,71 @@ downloadPdfBtn.addEventListener("click", async () => {
     showMessage("PDF GENERATED SUCCESSFULLY.", 'toast-success');
 });
 
+
 function exportMetadataAsJson() {
     if (!rawExifData || Object.keys(rawExifData).length === 0) {
         showMessage("NO METADATA TO EXPORT.", 'error');
         return;
     }
-    try {
-        const jsonString = JSON.stringify(rawExifData, null, 2);
-        const blob = new Blob([jsonString], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'image_metadata.json';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        showMessage("JSON FILE EXPORTED.", 'toast-success');
-    } catch (error) {
-        console.error("Error exporting JSON:", error);
-        showMessage(`ERROR EXPORTING JSON: ${error.message.toUpperCase()}`, 'error');
-    }
-}
-
-// --- AI Image Analysis Function ---
-async function analyzeImageAI(base64ImageData, locationName, coords) {
-    if (!base64ImageData) {
-        showMessage("NO IMAGE DATA AVAILABLE FOR AI ANALYSIS.", 'error');
-        return;
-    }
-    aiAnalysisOutput.classList.remove('hidden');
-    aiAnalysisOutput.innerHTML = `<div class="spinner"></div> ANALYZING IMAGE WITH AI...`;
-
-    const prompt = `Analyze the content of this image. If GPS coordinates ${coords ? `${coords.lat}, ${coords.lon}` : 'are not available'} and location name "${locationName}" are provided, consider them in your analysis. Describe what you see in the image and how it relates to the given location, if applicable. Be concise and informative.`;
-    
-    try {
-        const payload = {
-            contents: [{
-                role: "user",
-                parts: [
-                    { text: prompt },
-                    { inlineData: { mimeType: "image/jpeg", data: base64ImageData } }
-                ]
-            }],
-        };
-        const apiKey = import.meta.env.VITE_GEMINI_API_KEY; 
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-
-        const response = await fetch(apiUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error?.message || `API request failed with status ${response.status}`);
-        }
-        
-        const result = await response.json();
-
-        if (result.candidates && result.candidates.length > 0) {
-            const text = result.candidates[0].content.parts.map(part => part.text).join("");
-            aiAnalysisOutput.innerHTML = `<p><strong>AI ANALYSIS:</strong> ${text}</p>`;
-        } else {
-            aiAnalysisOutput.innerHTML = `<p><strong>AI ANALYSIS:</strong> <em>UNABLE TO GENERATE ANALYSIS. The model did not return any candidates.</em></p>`;
-            console.error("AI analysis response structure unexpected:", result);
-        }
-    } catch (error) {
-        console.error("Error during AI image analysis:", error);
-        aiAnalysisOutput.innerHTML = `<p><strong>AI ANALYSIS:</strong> <em>ERROR DURING ANALYSIS: ${error.message.toUpperCase()}.</em></p>`;
-    }
+    const jsonString = JSON.stringify(rawExifData, null, 2);
+    const blob = new Blob([jsonString], { type: "application/json" });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'image_metadata.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+    showMessage("JSON EXPORTED.", 'toast-success');
 }
 
 // --- Event Listeners ---
-
 function renderHistoryList() {
     historyList.innerHTML = '';
     if (userHistoryCache.length === 0) {
         historyList.innerHTML = '<li>NO HISTORY FOUND.</li>';
-    } else {
-        userHistoryCache.forEach((item, index) => {
-            const li = document.createElement('li');
-            li.dataset.index = index;
-            // Handle both Firestore Timestamps and JS Dates for robust rendering
-            const date = item.timestamp.toDate ? item.timestamp.toDate().toLocaleString() : new Date(item.timestamp).toLocaleString();
-            li.innerHTML = `
-                <div class="history-item-content">
-                    <span class="history-address">${item.address}</span>
-                    <span class="history-date">${date}</span>
-                </div>
-                <button class="history-item-delete" data-delete-index="${index}" title="Delete Entry">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
-                </button>
-            `;
-            historyList.appendChild(li);
-        });
+        return;
     }
+    userHistoryCache.forEach((item, index) => {
+        const li = document.createElement('li');
+        li.dataset.index = index;
+        const date = item.timestamp instanceof Date ? item.timestamp.toLocaleString() : new Date(item.timestamp).toLocaleString();
+        li.innerHTML = `
+            <div class="history-item-content">
+                <span class="history-address">${item.address || 'Unknown Location'}</span>
+                <span class="history-date">${date}</span>
+            </div>
+            <button class="history-item-delete" data-delete-index="${index}" title="Delete Entry">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+            </button>`;
+        historyList.appendChild(li);
+    });
 }
 
-
-logoutBtn.addEventListener('click', performLogout);
+// Bind all major event listeners
+input.addEventListener("change", (e) => processFile(e.target.files[0]));
+resetBtn.addEventListener("click", resetApplication);
 exportJsonBtn.addEventListener('click', exportMetadataAsJson);
 mapTypeSelect.addEventListener('change', (e) => switchMapLayer(e.target.value));
-toggleRawMetadataBtn.addEventListener('click', () => {
-    isRawMetadataVisible = !isRawMetadataVisible; 
-    updateMetadataDisplay(); 
+toggleRawMetadataBtn.addEventListener('click', () => { isRawMetadataVisible = !isRawMetadataVisible; updateMetadataDisplay(); });
+historyBtn.addEventListener('click', () => { historySidebar.classList.add('open'); sidebarOverlay.classList.add('visible'); });
+closeHistoryBtn.addEventListener('click', closeHistorySidebar);
+sidebarOverlay.addEventListener('click', closeHistorySidebar);
+hamburgerMenu.addEventListener('click', () => {
+    navbarLinks.classList.toggle('open');
+    hamburgerMenu.classList.toggle('active');
 });
+
+// Close mobile menu when clicking outside
+document.addEventListener('click', (e) => {
+    if (!navbarLinks.contains(e.target) && !hamburgerMenu.contains(e.target)) {
+        navbarLinks.classList.remove('open');
+        hamburgerMenu.classList.remove('active');
+    }
+});
+profileIcon.addEventListener('click', (e) => { profileDropdownContent.classList.toggle('show'); e.stopPropagation(); });
+window.addEventListener('click', (e) => { if (!profileDropdownContent.contains(e.target) && !profileIcon.contains(e.target)) profileDropdownContent.classList.remove('show'); });
+
 document.body.addEventListener('dragover', (e) => { e.preventDefault(); document.body.classList.add('drag-over'); });
 document.body.addEventListener('dragleave', () => document.body.classList.remove('drag-over'));
 document.body.addEventListener('drop', (e) => {
@@ -667,38 +564,21 @@ document.body.addEventListener('drop', (e) => {
         showMessage("ONLY IMAGE FILES ARE SUPPORTED.", 'error');
     }
 });
-input.addEventListener("change", function () {
-    if (this.files.length > 0) processFile(this.files[0]);
-});
-resetBtn.addEventListener("click", resetApplication);
 
-// --- REVISED: historyBtn listener is now very simple ---
-historyBtn.addEventListener('click', () => {
-    historySidebar.classList.add('open');
-    sidebarOverlay.classList.add('visible');
-    profileDropdownContent.classList.remove('show'); 
-});
-
-closeHistoryBtn.addEventListener('click', closeHistorySidebar);
-sidebarOverlay.addEventListener('click', closeHistorySidebar);
-
-historyList.addEventListener('click', (e) => {
+historyList.addEventListener('click', async (e) => {
     const deleteBtn = e.target.closest('.history-item-delete');
-
     if (deleteBtn) {
         e.stopPropagation();
-        const indexToDelete = parseInt(deleteBtn.dataset.deleteIndex, 10);
-        
-        userHistoryCache.splice(indexToDelete, 1);
+        const index = parseInt(deleteBtn.dataset.deleteIndex, 10);
+        userHistoryCache.splice(index, 1);
+        await syncHistoryWithFirestore(userHistoryCache);
         renderHistoryList();
-        syncHistoryWithFirestore(userHistoryCache);
-        
         showMessage("History entry deleted.", 'toast-success');
         return;
     }
-
-    const li = e.target.closest('li');
-    if (!li || li.dataset.index === undefined) return;
+    
+    const li = e.target.closest('li[data-index]');
+    if (!li) return;
 
     resetApplication();
 
@@ -706,85 +586,55 @@ historyList.addEventListener('click', (e) => {
     const item = userHistoryCache[index];
     if (!item) return;
 
-    const lat = item.latitude;
-    const lon = item.longitude;
-    const address = item.address;
+    extractedMetadata = item.metadata || {};
+    currentImageBase64 = item.imagePreview || null;
+    rawExifData = {};
 
+    const { latitude: lat, longitude: lon, address } = item;
     if (typeof lat === 'number' && typeof lon === 'number') {
-        if (map) {
-            map.setView([lat, lon], 15);
-            if (marker) { marker.setLatLng([lat, lon]); } 
-            else { marker = L.marker([lat, lon], { icon: customGreenIcon }).addTo(map); }
-            marker.bindPopup("SAVED LOCATION").openPopup();
-        }
+        currentLatLng = { lat, lon };
+        map.setView([lat, lon], 15);
+        if (marker) marker.remove();
+        marker = L.marker([lat, lon], { icon: customGreenIcon }).addTo(map).bindPopup("SAVED LOCATION").openPopup();
         updateMapHeaderCoordinates(lat, lon);
         coordinatesTextDiv.innerHTML = `<p>GPS COORDINATES: <span>${lat.toFixed(6)}, ${lon.toFixed(6)}</span></p>`;
         const gmapsLink = `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
         viewOnGoogleMapsBtn.classList.remove('hidden');
         viewOnGoogleMapsBtn.onclick = () => window.open(gmapsLink, '_blank');
     } else {
+        currentLatLng = null;
         updateMapHeaderCoordinates(null, null);
         coordinatesTextDiv.innerHTML = `<p>GPS COORDINATES: <span>NOT FOUND</span></p>`;
     }
-    
-    reversedGeocodingOutput.innerHTML = `<p>${address}</p>`;
+
+    reversedGeocodingOutput.innerHTML = `<p>${address || 'Address not available'}</p>`;
     reversedGeocodingOutput.classList.remove('hidden');
     infoSection.classList.remove('hidden');
 
-    if (item.imagePreview) {
-        uploadedImagePreview.src = `data:image/jpeg;base64,${item.imagePreview}`;
+    if (currentImageBase64) {
+        uploadedImagePreview.src = `data:image/jpeg;base64,${currentImageBase64}`;
         uploadedImagePreview.classList.remove('hidden');
-    } else {
-        uploadedImagePreview.classList.add('hidden');
     }
 
-    if (item.metadata && Object.keys(item.metadata).length > 0) {
-        extractedMetadata = item.metadata;
-        rawExifData = {}; 
-        updateMetadataDisplay();
-        downloadPdfBtn.classList.remove('hidden'); 
-    } else {
-        extractedMetadata = {};
-        updateMetadataDisplay();
-        metadataDiv.innerHTML = "<p class='italic'><em>NO METADATA SAVED FOR THIS ENTRY.</em></p>";
+    updateMetadataDisplay();
+    if (Object.keys(extractedMetadata).length > 0) {
+        downloadPdfBtn.classList.remove('hidden');
     }
 
     toggleRawMetadataBtn.classList.add('hidden');
     exportJsonBtn.classList.add('hidden');
-    
-    if (item.imagePreview) {
+
+    if (currentImageBase64) {
         analyzeImageAIBtn.classList.remove('hidden');
-        const historyCoords = (typeof lat === 'number' && typeof lon === 'number') ? { lat, lon } : null;
-        analyzeImageAIBtn.onclick = () => analyzeImageAI(item.imagePreview, item.address, historyCoords);
-        
-        aiAnalysisOutput.classList.add('hidden');
-        aiAnalysisOutput.innerHTML = '';
-    } else {
-        analyzeImageAIBtn.classList.add('hidden');
-        aiAnalysisOutput.classList.add('hidden');
-        aiAnalysisOutput.innerHTML = '';
+        analyzeImageAIBtn.onclick = () => handleAIAnalysis(address);
     }
+    
+    chatbotElements.toggle.classList.add('visible');
+    initializeChatbot(chatbotElements, () => ({ extractedMetadata, currentImageBase64 }));
 
     closeHistorySidebar();
 });
 
-
-// --- Nav and Dropdown Toggles ---
-hamburgerMenu.addEventListener('click', () => {
-    navbarLinks.classList.toggle('open');
-});
-
-profileIcon.addEventListener('click', (event) => {
-    profileDropdownContent.classList.toggle('show');
-    event.stopPropagation(); 
-    navbarLinks.classList.remove('open');
-});
-
-window.addEventListener('click', (event) => {
-    if (!profileDropdownContent.contains(event.target) && !profileIcon.contains(event.target)) {
-        profileDropdownContent.classList.remove('show');
-    }
-});
 
 // --- Initial App Load ---
 initializeWorldMap();
