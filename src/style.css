@@ -24,7 +24,9 @@ body {
   flex-direction: column;
   align-items: center;
 }
-
+.main-content-wrapper h1{
+  font-family: 'Michroma', sans-serif;
+}
 /* Navbar Styling */
 .navbar {
   width: 100%;
@@ -47,6 +49,8 @@ body {
 }
 
 .navbar .logo-icon {
+  filter: drop-shadow(0 0 4px #00FF00);
+  opacity: 0.8;
   width: 30px;
   height: 30px;
   margin-right: 10px;
@@ -62,10 +66,6 @@ body {
 .navbar-brand {
   font-family: 'Michroma', sans-serif;
   color: #00CC00;
-  text-shadow: 
-    0 0 3px #00CC00, 
-    0 0 8px #00CC00,
-    0 0 15px rgba(0, 204, 0, 0.5);
   font-size: 1.5rem;
   font-weight: 800;
   letter-spacing: 0.05em;
@@ -92,7 +92,7 @@ body {
     0 0 8px #00CC00,
     0 0 15px rgba(0, 204, 0, 0.5);
   font-size: 1.5rem;
-  font-weight: 800;
+  font-weight: 500;
   letter-spacing: 0.05em;
   transition: color 0.3s ease;
 }
@@ -1113,7 +1113,7 @@ button.hidden { display: none; }
 }
 
 .chatbot-toggle-button { 
-  background-color: #00cc00; 
+  background-color: #00ff00; 
   color: #0A0A0A; 
   border: 1px solid #00ff00; 
   border-radius: 12px; 
@@ -1179,7 +1179,9 @@ button.hidden { display: none; }
 .chat-header { 
   background: #0A0A0A; 
   color: #00ff00; 
-  font-family: 'Share Tech Mono', monospace; 
+  font-family: 'Share Tech', monospace;
+  text-transform: uppercase;
+  
   font-size: 1.1em; 
   font-weight: bold; 
   text-align: left; 
@@ -1188,7 +1190,7 @@ button.hidden { display: none; }
   display: flex; 
   justify-content: space-between; 
   align-items: center; 
-  letter-spacing: 1px; 
+  letter-spacing: 2px; 
   text-shadow: 0 0 4px #00ff00;
 }
 
@@ -1197,13 +1199,16 @@ button.hidden { display: none; }
   background: none; 
   border: none; 
   color: #00ff00; 
-  font-size: 1.5em; 
+  font-size: 1.2em; 
   cursor: pointer; 
-  padding: 0 5px; 
-  transition: color 0.2s; 
+  padding: 0 5px;
+  transition: color 0.2s, rotate 0.2s; 
   line-height: 1;
 }
-.chat-header .close-btn:hover { color: #fff; }
+.chat-header .close-btn:hover { 
+  color: #fff; 
+  rotate: 90deg;
+}
 
 .chat-messages { 
   flex-grow: 1; 
