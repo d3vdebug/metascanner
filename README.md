@@ -195,10 +195,6 @@ Metascanner is now up and running locally! ✅
 
 ---
 
-## 📄 License
-
-This project is licensed under the [MIT License](LICENSE).
-
 ---
 
 ## 🙌 Contributing
