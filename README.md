@@ -1,7 +1,5 @@
 <h1>Metascanner</h1> 
 
-
-
 **Metascanner** is a sophisticated, web-based tool designed for in-depth image analysis. It provides a secure, **hacker-themed interface** for users to upload images, extract and view detailed EXIF metadata, pinpoint GPS coordinates on an interactive map, and leverage the power of **Google's Gemini AI** for visual content analysis and interactive chat.
 
 The application focuses on modularity, security (via Firebase Authentication), and a rich user experience — including persistent history and export features.
